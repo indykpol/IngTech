@@ -1,0 +1,21 @@
+---
+title: "Modelling the probability of a default using toy data"
+output: html_notebook
+---
+
+
+
+```{r}
+PD_data <- read_delim("D:/Git/IngTech/data/pd_toy_data.csv.gz", 
+    ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), intodefault = col_logical()), 
+    trim_ws = TRUE)
+str(PD_data)
+```
+```{r}
+summary(PD_data)
+```
+```{r}
+library(ggplot2)
+```
+
+
