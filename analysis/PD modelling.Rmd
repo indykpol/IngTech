@@ -7,15 +7,43 @@ output: html_notebook
 
 ```{r}
 PD_data <- read_delim("D:/Git/IngTech/data/pd_toy_data.csv.gz", 
-    ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), intodefault = col_logical()), 
+    ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), default_moment = col_date(format = "%d-%m-%Y"), intodefault = col_logical(), customer_id = col_character()), 
     trim_ws = TRUE)
 str(PD_data)
 ```
 ```{r}
+head(PD_data, n = 20)
+```
+A short time series of customer ratings and corresponding probabilities of the default.
+```{r}
 summary(PD_data)
 ```
+
+
+
 ```{r}
 library(ggplot2)
+ggplot(PD_data, aes(x = mrating, y = PD)) + geom_point(alpha = 0.15) + theme_bw()
 ```
+A rather discrete, non-continuous rating system.
+```{r}
+ggplot(PD_data, aes(x = intodefault, y = mrating, colour = intodefault)) + geom_boxplot() + theme_bw()
+ggplot(PD_data, aes(x = intodefault, y = PD, colour = intodefault)) + geom_boxplot() + theme_bw()
+```
+Both rating and the predicted probability of the default correlate to whether a customer defaults eventually.
+```{r}
+cor(PD_data[, c("mrating", "PD", "intodefault")], method = "spearman")
+```
+
+```{r}
+nrow(subset(PD_data, intodefault == TRUE)) / nrow(subset(PD_data, intodefault == FALSE))
+```
+
+```{r}
+model <- glm(data = PD_data, formula = intodefault ~ mrating, family = "binomial")
+summary(model)
+```
+
+
 
 
