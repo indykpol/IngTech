@@ -7,40 +7,41 @@ output: html_notebook
 
 ```{r}
 PD_data <- read_delim("D:/Git/IngTech/data/pd_toy_data.csv.gz", 
-    ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), default_moment = col_date(format = "%d-%m-%Y"), intodefault = col_logical(), customer_id = col_character()), 
+    ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), default_moment = col_date(format = "%d-%m-%Y"), intodefault = col_logical(), mrating = col_factor(), customer_id = col_factor()), 
     trim_ws = TRUE)
 str(PD_data)
 ```
+It's a collection of PD data for 37716 customers with 16 categories of ratings.
 ```{r}
 head(PD_data, n = 20)
 ```
-A short time series of customer ratings and corresponding probabilities of the default.
+Each customer has multiple rating follow-ups (with updating rating), and information whether and when he/she defaulted.
 ```{r}
 summary(PD_data)
 ```
 
+```{r}
+ggplot(PD_data, aes(x = intodefault, y = PD, colour = intodefault)) + geom_boxplot() + theme_bw() + facet_wrap(~ mrating)
+```
+Let's now generate a summary of default rates per rating
+```{r}
+PD_data$mrating <- factor(PD_data$mrating, levels = sort(levels(PD_data$mrating)))# sort the mratings first
+PD_summary <- data.frame(mrating = levels(PD_data$mrating), PD = 0, n_observed = 0, n_total = 0)
+for (i in 1:length(levels(PD_data$mrating))) {
+	PD_summary[i, "PD"] <- subset(PD_data, mrating == levels(PD_data$mrating)[i])[1,"PD"]
+	PD_summary[i, "n_observed"] <- nrow(unique(subset(PD_data, mrating == levels(PD_data$mrating)[i] & intodefault == TRUE, select = c("customer_id", "mrating"))))
+	PD_summary[i,"n_total"] <- nrow(unique(subset(PD_data, mrating == levels(PD_data$mrating)[i], select = c("customer_id", "mrating"))))
+}
+PD_summary$default_rate <- PD_summary$n_observed / PD_summary$n_total
+PD_summary$n_expected <- round(PD_summary$PD * PD_summary$n_total)
+PD_summary$binomial_pval <- sapply(1:nrow(PD_summary), FUN = function(i) binom.test(x = PD_summary$n_observed[i], n = PD_summary$n_total[i], p = PD_summary$PD[i], alternative = "two.sided")$p.value)
+PD_summary
+```
+
 
 
 ```{r}
-library(ggplot2)
-ggplot(PD_data, aes(x = mrating, y = PD)) + geom_point(alpha = 0.15) + theme_bw()
-```
-A rather discrete, non-continuous rating system.
-```{r}
-ggplot(PD_data, aes(x = intodefault, y = mrating, colour = intodefault)) + geom_boxplot() + theme_bw()
-ggplot(PD_data, aes(x = intodefault, y = PD, colour = intodefault)) + geom_boxplot() + theme_bw()
-```
-Both rating and the predicted probability of the default correlate to whether a customer defaults eventually.
-```{r}
-cor(PD_data[, c("mrating", "PD", "intodefault")], method = "spearman")
-```
-
-```{r}
-nrow(subset(PD_data, intodefault == TRUE)) / nrow(subset(PD_data, intodefault == FALSE))
-```
-
-```{r}
-model <- glm(data = PD_data, formula = intodefault ~ mrating, family = "binomial")
+model <- glm(data = PD_summary[1,], formula = n_observed ~ n_total, family = "poisson")
 summary(model)
 ```
 
