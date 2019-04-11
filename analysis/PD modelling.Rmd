@@ -6,6 +6,7 @@ output: html_notebook
 
 
 ```{r}
+library(readr)
 PD_data <- read_delim("D:/Git/IngTech/data/pd_toy_data.csv.gz", 
     ";", escape_double = FALSE, col_types = cols(reporting_date = col_date(format = "%d-%m-%Y"), default_moment = col_date(format = "%d-%m-%Y"), intodefault = col_logical(), mrating = col_factor(), customer_id = col_factor()), 
     trim_ws = TRUE)
@@ -21,11 +22,63 @@ summary(PD_data)
 ```
 
 ```{r}
+library(ggplot2)
 ggplot(PD_data, aes(x = intodefault, y = PD, colour = intodefault)) + geom_boxplot() + theme_bw() + facet_wrap(~ mrating)
 ```
 Let's now generate a summary of default rates per rating
 ```{r}
-PD_data$mrating <- factor(PD_data$mrating, levels = sort(levels(PD_data$mrating)))# sort the mratings first
+PD_data$mrating <- factor(PD_data$mrating, levels = sort(levels(PD_data$mrating))) # sort the mratings first
+
+unique_customers <- unique(PD_data$customer_id)
+PD_data_first <- PD_data[1:length(unique_customers), ]
+PD_data_last <- PD_data[1:length(unique_customers), ]
+
+for (j in 1:length(unique_customers)) {
+	PD_data_first[j,] <- head(PD_data[which(PD_data$customer_id %in% unique_customers[j]),], n = 1)
+	PD_data_last[j,] <- tail(PD_data[which(PD_data$customer_id %in% unique_customers[j]),], n = 1)
+}
+```
+
+```{r}
+PD_summary_first <- data.frame(mrating = levels(PD_data_first$mrating), PD = 0, n_observed = 0, n_total = 0)
+for (i in 1:length(levels(PD_data_first$mrating))) {
+	
+	PD_summary_first[i, "PD"] <- subset(PD_data_first, mrating == levels(PD_data_first$mrating)[i])[1,"PD"]
+	PD_summary_first[i, "n_observed"] <- nrow(unique(subset(PD_data_first, mrating == levels(PD_data_first$mrating)[i] & intodefault == TRUE, select = c("customer_id", "mrating"))))
+	PD_summary_first[i,"n_total"] <- nrow(unique(subset(PD_data_first, mrating == levels(PD_data_first$mrating)[i], select = c("customer_id", "mrating"))))
+}
+PD_summary_first$default_rate <- PD_summary_first$n_observed / PD_summary_first$n_total
+PD_summary_first$n_expected <- round(PD_summary_first$PD * PD_summary_first$n_total)
+PD_summary_first$binomial_pval <- sapply(1:nrow(PD_summary_first), FUN = function(i) binom.test(x = PD_summary_first$n_observed[i], n = PD_summary_first$n_total[i], p = PD_summary_first$PD[i], alternative = "two.sided")$p.value)
+PD_summary_first <- cbind(PD_summary_first, binom.exact(x = PD_summary_first$n_observed, n = PD_summary_first$n_total)[,4:5], binom.exact(x = PD_summary_first$n_expected, n = PD_summary_first$n_total)[,4:5])
+colnames(PD_summary_first)[8:11] <- c("lower_o", "upper_o", "lower_e", "upper_e")
+
+PD_summary_first[,-(8:11)]
+apply(PD_summary_first[,c("n_observed", "n_expected")], 2, sum)
+
+ggplot(PD_summary_first, aes(x = mrating, y = PD, ymin = lower_o, ymax = upper_o)) + geom_point(alpha = 0.75, colour="black") +  geom_errorbar(width=0.2, alpha = 0.75, colour="red") + geom_point(aes(x = mrating, y = default_rate), colour = "red", alpha = 0.75) + geom_errorbar(aes(x = mrating, ymin = lower_e, ymax = upper_e), colour = "black", width=0.2, alpha = 0.75) + theme_bw() + theme(legend.position = "none")
+```
+```{r}
+PD_summary_last <- data.frame(mrating = levels(PD_data_last$mrating), PD = 0, n_observed = 0, n_total = 0)
+for (i in 1:length(levels(PD_data_last$mrating))) {
+	
+	PD_summary_last[i, "PD"] <- subset(PD_data_last, mrating == levels(PD_data_last$mrating)[i])[1,"PD"]
+	PD_summary_last[i, "n_observed"] <- nrow(unique(subset(PD_data_last, mrating == levels(PD_data_last$mrating)[i] & intodefault == TRUE, select = c("customer_id", "mrating"))))
+	PD_summary_last[i,"n_total"] <- nrow(unique(subset(PD_data_last, mrating == levels(PD_data_last$mrating)[i], select = c("customer_id", "mrating"))))
+}
+PD_summary_last$default_rate <- PD_summary_last$n_observed / PD_summary_last$n_total
+PD_summary_last$n_expected <- round(PD_summary_last$PD * PD_summary_last$n_total)
+PD_summary_last$binomial_pval <- sapply(1:nrow(PD_summary_last), FUN = function(i) binom.test(x = PD_summary_last$n_observed[i], n = PD_summary_last$n_total[i], p = PD_summary_last$PD[i], alternative = "two.sided")$p.value)
+PD_summary_last <- cbind(PD_summary_last, binom.exact(x = PD_summary_last$n_observed, n = PD_summary_last$n_total)[,4:5], binom.exact(x = PD_summary_last$n_expected, n = PD_summary_last$n_total)[,4:5])
+colnames(PD_summary_last)[8:11] <- c("lower_o", "upper_o", "lower_e", "upper_e")
+
+PD_summary_last[,-(8:11)]
+apply(PD_summary_last[,c("n_observed", "n_expected")], 2, sum)
+
+ggplot(PD_summary_last, aes(x = mrating, y = PD, ymin = lower_o, ymax = upper_o)) + geom_point(alpha = 0.75, colour="black") +  geom_errorbar(width=0.2, alpha = 0.75, colour="red") + geom_point(aes(x = mrating, y = default_rate), colour = "red", alpha = 0.75) + geom_errorbar(aes(x = mrating, ymin = lower_e, ymax = upper_e), colour = "black", width=0.2, alpha = 0.75) + theme_bw() + theme(legend.position = "none")
+```
+
+```{r}
 PD_summary <- data.frame(mrating = levels(PD_data$mrating), PD = 0, n_observed = 0, n_total = 0)
 for (i in 1:length(levels(PD_data$mrating))) {
 	PD_summary[i, "PD"] <- subset(PD_data, mrating == levels(PD_data$mrating)[i])[1,"PD"]
@@ -35,16 +88,29 @@ for (i in 1:length(levels(PD_data$mrating))) {
 PD_summary$default_rate <- PD_summary$n_observed / PD_summary$n_total
 PD_summary$n_expected <- round(PD_summary$PD * PD_summary$n_total)
 PD_summary$binomial_pval <- sapply(1:nrow(PD_summary), FUN = function(i) binom.test(x = PD_summary$n_observed[i], n = PD_summary$n_total[i], p = PD_summary$PD[i], alternative = "two.sided")$p.value)
-PD_summary
+PD_summary <- cbind(PD_summary, binom.exact(x = PD_summary$n_observed, n = PD_summary$n_total)[,4:5], binom.exact(x = PD_summary$n_expected, n = PD_summary$n_total)[,4:5])
+colnames(PD_summary)[8:11] <- c("lower_o", "upper_o", "lower_e", "upper_e")
+
+PD_summary[,-(8:11)]
+apply(PD_summary[,c("n_observed", "n_expected")], 2, sum)
+
+ggplot(PD_summary, aes(x = mrating, y = PD, ymin = lower_o, ymax = upper_o)) + geom_point(alpha = 0.75, colour="black") +  geom_errorbar(width=0.2, alpha = 0.75, colour="red") + geom_point(aes(x = mrating, y = default_rate), colour = "red", alpha = 0.75) + geom_errorbar(aes(x = mrating, ymin = lower_e, ymax = upper_e), colour = "black", width=0.2, alpha = 0.75) + theme_bw() + theme(legend.position = "none")
 ```
-
-
-
 ```{r}
-model <- glm(data = PD_summary[1,], formula = n_observed ~ n_total, family = "poisson")
-summary(model)
+PD_summary_nonUnique <- data.frame(mrating = levels(PD_data$mrating), PD = 0, n_observed = 0, n_total = 0)
+for (i in 1:length(levels(PD_data$mrating))) {
+	PD_summary_nonUnique[i, "PD"] <- subset(PD_data, mrating == levels(PD_data$mrating)[i])[1,"PD"]
+	PD_summary_nonUnique[i, "n_observed"] <- nrow(subset(PD_data, mrating == levels(PD_data$mrating)[i] & intodefault == TRUE, select = c("customer_id", "mrating")))
+	PD_summary_nonUnique[i,"n_total"] <- nrow(subset(PD_data, mrating == levels(PD_data$mrating)[i], select = c("customer_id", "mrating")))
+}
+PD_summary_nonUnique$default_rate <- PD_summary_nonUnique$n_observed / PD_summary_nonUnique$n_total
+PD_summary_nonUnique$n_expected <- round(PD_summary_nonUnique$PD * PD_summary_nonUnique$n_total)
+PD_summary_nonUnique$binomial_pval <- sapply(1:nrow(PD_summary_nonUnique), FUN = function(i) binom.test(x = PD_summary_nonUnique$n_observed[i], n = PD_summary_nonUnique$n_total[i], p = PD_summary_nonUnique$PD[i], alternative = "two.sided")$p.value)
+PD_summary_nonUnique <- cbind(PD_summary_nonUnique, binom.exact(x = PD_summary_nonUnique$n_observed, n = PD_summary_nonUnique$n_total)[,4:5], binom.exact(x = PD_summary_nonUnique$n_expected, n = PD_summary_nonUnique$n_total)[,4:5])
+colnames(PD_summary_nonUnique)[8:11] <- c("lower_o", "upper_o", "lower_e", "upper_e")
+
+PD_summary_nonUnique[,-(8:11)]
+apply(PD_summary_nonUnique[,c("n_observed", "n_expected")], 2, sum)
+
+ggplot(PD_summary_nonUnique, aes(x = mrating, y = PD, ymin = lower_o, ymax = upper_o)) + geom_point(alpha = 0.75, colour="black") +  geom_errorbar(width=0.2, alpha = 0.75, colour="red") + geom_point(aes(x = mrating, y = default_rate), colour = "red", alpha = 0.75) + geom_errorbar(aes(x = mrating, ymin = lower_e, ymax = upper_e), colour = "black", width=0.2, alpha = 0.75) + theme_bw() + theme(legend.position = "none")
 ```
-
-
-
-
