@@ -114,3 +114,24 @@ apply(PD_summary_nonUnique[,c("n_observed", "n_expected")], 2, sum)
 
 ggplot(PD_summary_nonUnique, aes(x = mrating, y = PD, ymin = lower_o, ymax = upper_o)) + geom_point(alpha = 0.75, colour="black") +  geom_errorbar(width=0.2, alpha = 0.75, colour="red") + geom_point(aes(x = mrating, y = default_rate), colour = "red", alpha = 0.75) + geom_errorbar(aes(x = mrating, ymin = lower_e, ymax = upper_e), colour = "black", width=0.2, alpha = 0.75) + theme_bw() + theme(legend.position = "none")
 ```
+
+Please show / argue how your answer would change if instead the PDs are the corresponding parameter of the ASRF model. You can assume fixed asset correlation of 15%.
+A beta binomial model could be used in place of the binomial model. Beta will in this case model the intra-correlation of the defaults. The additional parameter of this distribution will model the overdispersion o variance assumed by the binomial model:
+xi ∼ Binomial(n,p)
+p ∼ Beta(α,β)
+```{r}
+library(rmutil)
+PD_summary_nonUnique$betabinomial_pval <- sapply(1:nrow(PD_summary_nonUnique), FUN = function(x)  1 - sum(dbetabinom(y = c(0:PD_summary_nonUnique[x, "n_observed"], PD_summary_nonUnique[x, "n_total"]), size = PD_summary_nonUnique[x, "n_total"], m = PD_summary_nonUnique[x, "PD"], s = 1.15)))
+PD_summary_nonUnique[,-c(8:11)]
+```
+Longitudinal Data Analysis for Discrete and Continuous Outcomes, Scott L. Zeger and Kung-Yee Liang
+Biometrics, Vol. 42, No. 1 (Mar., 1986), pp. 121-130
+The GEE approach of Zeger and Liang facilitates analysis of data collected in longitudinal, nested or repeated measures design. GEE’s use the GLM to estimate more efficient and unbiased regression parameters relative to ordinary least squares regression in part because they permit specification of a working correlation matrix that accounts for the form of within-subject correlation of responses on dependent variables of many different distributions, including normal, binomial and poisson.
+
+Assumptions:
+The responses are Y1; Y2; :::; Yn are correlated or clustered, i.e.,
+cases are not independent
+Covariates can be the power terms or some other nonlinear transformations of the original independent variables, can have
+interaction terms.
+The homogeneity of variance does NOT need to be satisfied
+Errors are correlated
